@@ -105,8 +105,7 @@ make clean
 # if the reconfiguration has been enabled for this bisection, do it
 if [ $RECONFIGURE_BETWEEN_RUNS -ne 0 ]
 then
-    sh autogen.sh
-    btcconfignew 1_62 --without-miniupnpc
+    do_configure
 fi
 
 
