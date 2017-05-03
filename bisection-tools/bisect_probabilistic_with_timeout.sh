@@ -1,5 +1,9 @@
 #!/bin/bash
 # helper script to bisect probabilistic test failures which can also loop
+#
+# CAUTION!!!! This kills any running bitcoind's as part of cleanup!
+# Only run in an isolated test environment!
+#
 # it needs you to configure a bunch of parameters below, most urgently
 # TEST_COMMAND, RECONFIGURE_BETWEEN_RUNS, STOP_ITERATIONS, ITERATION_TIMEOUT_SECS
 # Read up on these in the comments below.
@@ -30,6 +34,9 @@ NUM_CORES_TO_USE=5
 # should we do autogen + configure before each build ?
 # non-zero value means yes
 RECONFIGURE_BETWEEN_RUNS=0
+
+# if non-zero, remove the cache/ folder before each iteration
+CLEAR_CACHE_BETWEEN_RUNS=1
 
 # the command to test
 TEST_COMMAND="qa/pull-tester/rpc-tests.py txn_doublespend.py --mineblock"
@@ -108,12 +115,19 @@ echo "building..."
 make -j ${NUM_CORES_TO_USE}
 
 # start the test runs...
-echo "testing for at most ${STOP_ITERATIONS} iterations..."
+echo "testing for at most ${STOP_ITERATIONS} iterations"
+echo "timeout is ${ITERATION_TIMEOUT_SECS} seconds per run..."
 iteration=0
 while :;
 do
     iteration=$((++iteration))
     echo "`date`: iteration ${iteration}"
+
+    # clear cache if necessary
+    if [ $CLEAR_CACHE_BETWEEN_RUNS -ne 0 ]
+    then
+        rm -rf cache
+    fi
 
     # check if we have parallel test runner
     contains "${TEST_COMMAND}" "test_bitcoin"
@@ -141,10 +155,12 @@ do
     then
         if [ ${run_exit_code} -ne 124 ]
         then
+            killall bitcoind
             echo "failed during iteration ${iteration} with exit code: ${run_exit_code}"
             exit 1
         else
             # timed out
+            killall bitcoind
             echo "timed out after ${ITERATION_TIMEOUT_SECS} seconds during iteration ${iteration}"
             echo "check if you need to adjust the timeout to be higher!"
             exit 1
